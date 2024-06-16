@@ -88,6 +88,7 @@ def auto_scale_block(module, module_kwargs, w_bit, q_config, input_feat):
 
     # firstly, get the weight quantize function
     if w_bit is not None:
+        assert False
 
         def w_quantize_func(p):
             return pseudo_quantize_tensor(
@@ -95,11 +96,12 @@ def auto_scale_block(module, module_kwargs, w_bit, q_config, input_feat):
                 n_bit=w_bit,
                 **q_config,
             ).detach()
-
     else:
+        print("using quantize to fp16")
 
         def w_quantize_func(p):
-            return p
+            print("Casting to fp16")
+            return p.type(torch.float16)
 
     if "use_cache" in module_kwargs:
         module_kwargs.pop("use_cache")

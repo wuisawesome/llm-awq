@@ -156,7 +156,8 @@ def build_model_and_enc(model_path):
     else:  # fp16 to quantized
         args.run_awq &= not args.load_awq  # if load_awq, no need to run awq
         # Init model on CPU:
-        kwargs = {"torch_dtype": torch.float16, "low_cpu_mem_usage": True}
+        print("Loading model as fp32")
+        kwargs = {"torch_dtype": torch.float32, "low_cpu_mem_usage": True}
         if not vila_10_quant_mode:
             model = AutoModelForCausalLM.from_pretrained(
                 model_path, config=config, trust_remote_code=True, **kwargs
@@ -189,30 +190,28 @@ def build_model_and_enc(model_path):
             awq_results = torch.load(args.load_awq, map_location="cpu")
             apply_awq(model, awq_results)
 
-        # weight quantization
-        if args.w_bit is not None:
-            if args.q_backend == "fake":
-                assert (
-                    args.dump_quant is None
-                ), "Need to use real quantization to dump quantized weights"
-                pseudo_quantize_model_weight(model, w_bit=args.w_bit, q_config=q_config)
-                if args.dump_fake:
-                    model.save_pretrained(args.dump_fake)
-                    print("Pseudo-quantized models saved at", args.dump_fake)
-            elif args.q_backend == "real":  # real quantization
-                real_quantize_model_weight(model, w_bit=args.w_bit, q_config=q_config)
-                if args.dump_quant:
-                    if not args.dump_quant.endswith("v2.pt"):
-                        print("[Info] Auto-change the dump_quant file name to *v2.pt")
-                        args.dump_quant = args.dump_quant.replace(".pt", "-v2.pt")
-                    dirpath = os.path.dirname(args.dump_quant)
-                    os.makedirs(dirpath, exist_ok=True)
+        if args.q_backend == "fake":
+            assert (
+                args.dump_quant is None
+            ), "Need to use real quantization to dump quantized weights"
+            pseudo_quantize_model_weight(model, w_bit=args.w_bit, q_config=q_config)
+            if args.dump_fake:
+                model.save_pretrained(args.dump_fake)
+                print("Pseudo-quantized models saved at", args.dump_fake)
+        elif args.q_backend == "real":  # real quantization
+            real_quantize_model_weight(model, w_bit=args.w_bit, q_config=q_config)
+            if args.dump_quant:
+                if not args.dump_quant.endswith("v2.pt"):
+                    print("[Info] Auto-change the dump_quant file name to *v2.pt")
+                    args.dump_quant = args.dump_quant.replace(".pt", "-v2.pt")
+                dirpath = os.path.dirname(args.dump_quant)
+                os.makedirs(dirpath, exist_ok=True)
 
-                    print(f"Saving the quantized model at {args.dump_quant}...")
-                    torch.save(model.cpu().state_dict(), args.dump_quant)
-                    exit(0)
-            else:
-                raise NotImplementedError
+                print(f"Saving the quantized model at {args.dump_quant}...")
+                torch.save(model.cpu().state_dict(), args.dump_quant)
+                exit(0)
+        else:
+            raise NotImplementedError
 
         # Move the model to GPU (as much as possible) for LM evaluation
         kwargs = {

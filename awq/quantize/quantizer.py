@@ -61,6 +61,7 @@ def scale_activations(module):
 def pseudo_quantize_tensor(
     w, n_bit=8, zero_point=True, q_group_size=-1, inplace=False, get_scale_zp=False
 ):
+    assert False
     org_w_shape = w.shape
     if q_group_size > 0:
         assert org_w_shape[-1] % q_group_size == 0
@@ -129,6 +130,24 @@ def real_quantize_model_weight(model, w_bit, q_config, init_only=False):
 
     assert q_config["zero_point"], "We only support zero_point quantization now."
 
+    # firstly, get the weight quantize function
+    if w_bit is not None:
+        assert False
+
+        def w_quantize_func(p):
+            return pseudo_quantize_tensor(
+                p,
+                n_bit=w_bit,
+                **q_config,
+            ).detach()
+    else:
+        print("using quantize to fp16")
+
+        def w_quantize_func(p):
+            print("Casting to fp16")
+            return p.type(torch.float16)
+
+
     layers = get_blocks(model)
     for i in tqdm(
         range(len(layers)),
@@ -147,9 +166,20 @@ def real_quantize_model_weight(model, w_bit, q_config, init_only=False):
                 set_op_by_name(layer, name, q_linear)
             else:
                 module.cuda()
+                """
                 module.weight.data, scales, zeros = pseudo_quantize_tensor(
                     module.weight.data, n_bit=w_bit, get_scale_zp=True, **q_config
                 )
+                """
+                print("Attempting to quantize", type(module), module)
+                module = module.type(torch.float16)
+                module.cpu()
+                set_op_by_name(layer, name, module)
+                torch.cuda.empty_cache()
+                gc.collect()
+
+                """
+                module.weight.data, scales, zeros = w_quantize_func(module.weight.data)
                 # scales = scales.t().contiguous()
                 # zeros = zeros.t().contiguous()
                 q_linear = WQLinear.from_linear(
@@ -160,6 +190,7 @@ def real_quantize_model_weight(model, w_bit, q_config, init_only=False):
                 set_op_by_name(layer, name, q_linear)
                 torch.cuda.empty_cache()
                 gc.collect()
+                """
 
     torch.cuda.empty_cache()
     gc.collect()

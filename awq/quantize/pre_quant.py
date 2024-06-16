@@ -166,7 +166,9 @@ def run_awq(
             )
         inps = inps.to(next(layer.parameters()).device)  # in case multi-gpu
         # get output as next layer's input
+        print("running layer", i)
         inps = layer(inps, **layer_kwargs)[0]
+        print("inferred")
         for h in handles:
             h.remove()
         # now solve for scaling and clipping
@@ -178,6 +180,7 @@ def run_awq(
         if (
             auto_scale
         ):  # if it applies, we should also modify the input_feat with scales
+            print("autoscale block", i)
             scales_list = auto_scale_block(
                 layer,
                 layer_kwargs,
@@ -185,6 +188,7 @@ def run_awq(
                 q_config=q_config,
                 input_feat=input_feat,
             )
+            print("apply scale block", i)
             # apply_scale(layer, scales_list, input_feat_dict=input_feat)
             apply_scale(layers[i], scales_list, input_feat_dict=input_feat)
             # append prefix to make names global

@@ -11,6 +11,24 @@ __all__ = ["auto_clip_block"]
 def auto_clip_layer(
     w, input_feat, n_bit, q_config, n_grid=20, max_shrink=0.5, n_sample_token=512
 ):
+
+
+    # firstly, get the weight quantize function
+    if n_bit is not None:
+        assert False
+
+        def w_quantize_func(p):
+            return pseudo_quantize_tensor(
+                p,
+                n_bit=n_bit,
+                **q_config,
+            ).detach()
+    else:
+        print("using quantize to fp16")
+
+        def w_quantize_func(p):
+            print("Casting to fp16")
+            return p.type(torch.float16)
     assert w.dim() == 2
     org_w_shape = w.shape
     # w           [co, ci]      -> [co, 1, n_group, group size]
@@ -42,7 +60,8 @@ def auto_clip_layer(
             max_val = org_max_val * (1 - i_s / n_grid)
             min_val = -max_val
             cur_w = torch.clamp(w, min_val, max_val)
-            q_w = pseudo_quantize_tensor(cur_w, n_bit=n_bit, **q_config)
+            # q_w = pseudo_quantize_tensor(cur_w, n_bit=n_bit, **q_config)
+            q_w = w_quantize_func(cur_w)
             cur_out = (input_feat * q_w).sum(dim=-1)
 
             # co, 1, n_group, 1
